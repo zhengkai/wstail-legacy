@@ -1,0 +1,17 @@
+body, p, td, span, textarea, button {
+	font-family: "Droid Sans Mono", monospace;
+	font-size: 16px;
+}
+
+div.input p {
+	margin: 0;
+}
+
+div.input textarea {
+	padding: 10px;
+}
+
+div.input button {
+	text-align: center;
+	padding: 4px 32px;
+}
