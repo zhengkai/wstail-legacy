@@ -9,12 +9,18 @@
 </head>
 <body>
 
+<div id="white_board"></div>
+
 <h2>WebSocket Test</h2>
+
+<p>status: <span id="status"></span></p>
 
 <div class="input">
 <textarea rows="3" cols="40" id="send_text"></textarea>
 <p><button id="send_button" onclick="buttonSend()">Send</button><p>
 </div>
+
+<p class="position">x = <span id="position_x"></span>, y = <span id="position_y"></span></p>
 
 <div id="output"></div>
 

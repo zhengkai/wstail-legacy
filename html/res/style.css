@@ -15,3 +15,23 @@ div.input button {
 	text-align: center;
 	padding: 4px 32px;
 }
+
+p.position span {
+	color: navy;
+}
+
+div#white_board {
+	cursor: crosshair;
+	width: 1000px;
+	height: 800px;
+	float: right;
+	border: 1px solid black;
+	position: relative;
+}
+
+div#white_board div.char {
+	width: 10px;
+	height: 10px;
+	background-color: red;
+	position: absolute;
+}
