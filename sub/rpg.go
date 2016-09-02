@@ -12,7 +12,6 @@ import (
 var chMsg = make(chan msgType)
 var aid uint64 = 0
 var lConn = make(map[uint64]*websocket.Conn)
-var lFile = make(map[string]*websocket.Conn)
 var cmdList = [...]string{
 	`setPos`,
 	`who`,
@@ -40,6 +39,34 @@ func session() websocket.Handler {
 				fmt.Println(`#`, id, ` receive exit with`, err.Error())
 				delete(lConn, id)
 				return
+			}
+
+			// 忽略所有格式错误的消息
+			json, err := simplejson.NewJson([]byte(msg))
+			if err != nil {
+				fmt.Println(`error json `, err)
+				continue
+			}
+
+			cmd := json.Get(`cmd`).MustString()
+
+			bIn := false
+			for _, checkCmd := range cmdList {
+				if checkCmd == cmd {
+					bIn = true
+					break
+				}
+			}
+			if !bIn {
+				fmt.Println(`unknown cmd `, cmd)
+				continue
+			}
+
+			// 只返回格式正确的消息
+			chMsg <- msgType{
+				id:   id,
+				cmd:  cmd,
+				data: json,
 			}
 		}
 	})
