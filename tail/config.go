@@ -38,15 +38,13 @@ func refreshConfig() {
 
 	configFile := initConfig()
 
-	var iWait int64
+	var iWait int64 = 3
 	for {
 		t, _ := tail.TailFile(configFile, tail.Config{Follow: true, Logger: tail.DiscardingLogger})
-		iWait = 10
 		lFileAllow = make(map[string]bool)
 		for line := range t.Lines {
-			iWait = 1
 			sLine := line.Text
-			sLine = strings.Trim(sLine, ` `)
+			sLine = strings.TrimSpace(sLine)
 			if sLine[0:1] != `/` {
 				continue
 			}

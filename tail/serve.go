@@ -19,11 +19,6 @@ type sessionInfo struct {
 	file string
 }
 
-type sessionVer struct {
-	ver  uint64
-	line uint64
-}
-
 type fileContent struct {
 	ver  uint64
 	size int64
@@ -35,7 +30,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 		// fmt.Println(`init upgrade fail`, err)
 		return
 	}
-	err = ws.WriteMessage(websocket.TextMessage, []byte(`!test`))
+	err = ws.WriteMessage(websocket.TextMessage, []byte(`!connected`))
 	if err != nil {
 		// fmt.Println(`init ws err`, err)
 	}
@@ -143,10 +138,10 @@ func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *web
 
 			if bReset {
 				bReset = false
-				err = ws.WriteMessage(websocket.TextMessage, []byte(`!reset`))
+				err = ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`!reset,ver:%d`, *ver)))
 			}
 
-			sbuf = append([]byte{'>'}, sbuf...)
+			sbuf = append([]byte{'>'}, sbuf[:n]...)
 			err = ws.WriteMessage(websocket.TextMessage, sbuf)
 			if err != nil {
 				fmt.Println(`ws err`, err)
