@@ -2,27 +2,32 @@
 var WsTail = {
 	ws: false,
 	target: null,
-	init: function(wsUri, oTarget) {
-		console.log('ws init');
-		console.log(wsUri);
+	uri: null,
+	create: function(wsUri, oTarget) {
+ 		var o = $.extend(true, {}, WsTail);
+		console.log('create target', oTarget);
+		o.target = oTarget;
+		o.uri = wsUri;
+ 		o.init();
+		return o;
+	},
+	init: function() {
+		console.log('init target', this.target);
 
-		this.target = oTarget;
-
-		var ws = new WebSocket(wsUri);
+		var ws = new WebSocket(this.uri);
 		this.ws = ws;
 
 		var $this = this;
-		ws.onopen    = function(evt) { $this._wsOpen(evt) };
-		ws.onclose   = function(evt) { $this._wsClose(evt) };
-		ws.onmessage = function(evt) { $this._wsMessage(evt) };
-		ws.onerror   = function(evt) { $this._wsError(evt) };
-
+		ws.onopen    = function (e) { $this._wsOpen(e) }
+		ws.onclose   = function (e) { $this._wsClose(e) }
+		ws.onmessage = function (e) { $this._wsMessage(e) }
+		ws.onerror   = function (e) { $this._wsError(e) }
 	},
 	_wsOpen: function(e) {
-		console.log(e)
+		console.log('ws open', new Date(), e)
 	},
 	_wsClose: function(e) {
-		console.log(e)
+		console.log('ws close', new Date(), e)
 	},
 	_wsMessage: function(e) {
 		var s = e.data;
@@ -43,7 +48,6 @@ var WsTail = {
 
 		if (cmd == '!') {
 			cmdMsg = s.substring(1);
-			console.log('cmd msg = ' + cmdMsg);
 			if (cmdMsg == 'reset') {
 				this.target.html('');
 				return;
@@ -51,13 +55,11 @@ var WsTail = {
 		}
 	},
 	_wsError: function(e) {
-		console.log(e)
+		console.log('ws error', new Date(), e)
 	}
 }
 
 $(document).ready(function () {
- 	var o = $.extend(true, {}, WsTail);
- 	o.init('wss://royal-qa.socialgamenet.com:443/ws?file=/tmp/abc.txt', $('#output'));
- 	var x = $.extend(true, {}, WsTail);
- 	x.init('wss://royal-qa.socialgamenet.com:443/ws?file=/tmp/php-error.txt', $('#xoutput'));
+ 	WsTail.create('wss://royal-qa.socialgamenet.com:443/ws?file=/tmp/a.txt', $('#output'));
+	WsTail.create('wss://royal-qa.socialgamenet.com:443/ws?file=/tmp/php-error.txt', $('#xoutput'));
 });
