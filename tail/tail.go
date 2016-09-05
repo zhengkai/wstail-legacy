@@ -53,18 +53,6 @@ type fileContent struct {
 	size int64
 }
 
-/*
-func session(c echo.Context) websocket.Handler {
-	return websocket.Handler(func(ws *websocket.Conn) {
-		fmt.Println(c)
-		t, _ := tail.TailFile(`/tmp/abc`, tail.Config{Follow: true})
-		for line := range t.Lines {
-			fmt.Println(`> `, line.Text)
-		}
-	})
-}
-*/
-
 func serveWs(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -153,7 +141,7 @@ func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *web
 		if *offset > 0 {
 			buf.Discard(*offset)
 		}
-		fmt.Println(`offset = `, *offset)
+		// fmt.Println(`offset = `, *offset)
 
 		for {
 			sbuf := make([]byte, 4096)
@@ -189,14 +177,14 @@ func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *web
 				return false
 			}
 
-			// fmt.Println(`ws send = "` + string(s) + `"`)
+			// fmt.Println(`ws send = "` + string(sbuf) + `"`)
 			// ws.WriteMessage(websocket.BinaryMessage, []byte(`end`))
 			if bEOF {
 				break
 			}
 		}
 
-		fmt.Println(`sid =`, sid, `, fid =`, fid, `, ver =`, ver, `, offset =`, offset, `, fc =`, fc)
+		// fmt.Println(`sid =`, sid, `, fid =`, fid, `, ver =`, ver, `, offset =`, offset, `, fc =`, fc)
 	}
 	return true
 }
