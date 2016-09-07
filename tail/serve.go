@@ -30,10 +30,12 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 		// fmt.Println(`init upgrade fail`, err)
 		return
 	}
-	err = ws.WriteMessage(websocket.TextMessage, []byte(`!connected`))
-	if err != nil {
-		// fmt.Println(`init ws err`, err)
-	}
+	/*
+		err = ws.WriteMessage(websocket.TextMessage, []byte(`!connected`))
+		if err != nil {
+			fmt.Println(`init ws err`, err)
+		}
+	*/
 
 	r.ParseForm()
 	sFile := strings.TrimSpace(r.Form.Get(`file`))
@@ -51,14 +53,16 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 				fmt.Println(`>`, k)
 			}
 		*/
+		err = ws.WriteMessage(websocket.TextMessage, []byte(`!file deny`+sFile))
 		ws.Close()
 		return
 	}
-
 	// fmt.Println(`file`, sFile, `OK`)
 
 	sid := atomic.AddUint64(&sessionSerial, 1)
+	err = ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`!connection id: %d`, sid)))
 	ch := make(chan uint64)
+	// fmt.Println(`new chan`, &ch, ch)
 	sessionChan[sid] = &ch
 	tailBind <- sessionInfo{
 		id:   sid,
@@ -67,9 +71,9 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 
 	var ver uint64
 	var offset int
-	var rCh chan bool
+	var rCh = make(chan bool)
 
-	fmt.Println(`new session`, sid, sFile)
+	// fmt.Println(`new session`, sid, sFile)
 
 	timeLastSent := time.Now().Unix()
 
@@ -90,29 +94,34 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 
-		var fid uint64
-		var bLoop bool
+		var rfid uint64
+		bLoop := true
+
+		// fmt.Println(`start loop`, ch)
 
 		for {
 			select {
 			case fid := <-ch:
 				timeLastSent = time.Now().Unix()
 				if fid > 0 {
+					rfid = fid
 					bLoop = send(sid, fid, sFile, &ver, &offset, ws)
 				} else {
 					bLoop = sendNoop(ws)
 				}
-				if !bLoop {
-					break
-				}
-			case r := <-rCh:
+			case rc := <-rCh:
 				timeLastSent = time.Now().Unix()
-				bLoop = r
+				bLoop = rc
+			}
+			if !bLoop {
+				break
 			}
 		}
 		timeLastSent = 0
 		delete(sessionChan, sid)
-		delete(*sessionMap[fid], sid)
+		if rfid > 0 {
+			delete(*sessionMap[rfid], sid)
+		}
 		ws.Close()
 	}()
 
@@ -229,13 +238,13 @@ func manager() {
 		select {
 		case sessInfo := <-tailBind:
 
-			pfid := fileMap[sessInfo.file]
-			if pfid == nil {
-				fid = atomic.AddUint64(&fileSerial, 1)
-				fileMap[sessInfo.file] = &fid
-				go scan(fid, sessInfo.file)
+			ftmp := fileMap[sessInfo.file]
+			if ftmp > 0 {
+				fid = ftmp
 			} else {
-				fid = *pfid
+				fid = atomic.AddUint64(&fileSerial, 1)
+				fileMap[sessInfo.file] = fid
+				go scan(fid, sessInfo.file)
 			}
 
 			list := sessionMap[fid]
@@ -248,7 +257,10 @@ func manager() {
 				n[sessInfo.id] = true
 			}
 
-			_tend(sessInfo.id, fid)
+			go func() {
+				*sessionChan[sessInfo.id] <- fid
+				// fmt.Println(`sent chan`)
+			}()
 		}
 	}
 }
@@ -314,6 +326,7 @@ func tend(fid uint64) {
 }
 
 func _tend(sid uint64, fid uint64) {
+	// fmt.Println(`_tend`, sid, fid, sessionChan[sid])
 	ch := sessionChan[sid]
 	if ch == nil {
 		return

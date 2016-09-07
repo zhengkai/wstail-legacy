@@ -16,7 +16,7 @@ var (
 	sessionChan   = make(map[uint64]*chan uint64)
 	tailBind      = make(chan sessionInfo, 1000)
 	filePool      = make(map[uint64]*fileContent)
-	fileMap       = make(map[string]*uint64)
+	fileMap       = make(map[string]uint64)
 	writeWait     = 10 * time.Second
 	sessionSerial uint64
 	fileSerial    uint64
@@ -38,7 +38,8 @@ func main() {
 	go refreshConfig()
 	go manager()
 
-	http.HandleFunc(`/ws`, serveWs)
+	http.HandleFunc(`/ws/status`, statusPage)
+	http.HandleFunc(`/ws/tail`, serveWs)
 
 	fmt.Println(`WsTail started`)
 	err := http.ListenAndServe(*addr, nil)
