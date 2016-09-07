@@ -1,4 +1,3 @@
-// var wsUri = 'wss://royal-qa.socialgamenet.com:443/ws?file=/tmp/a.txt';
 var WsTail = {
 	ws: false,
 	target: null,
@@ -58,8 +57,3 @@ var WsTail = {
 		console.log('ws error', new Date(), e)
 	}
 }
-
-$(document).ready(function () {
- 	WsTail.create('wss://royal-qa.socialgamenet.com:443/ws?file=/tmp/a.txt', $('#output'));
-	WsTail.create('wss://royal-qa.socialgamenet.com:443/ws?file=/tmp/php-error.txt', $('#xoutput'));
-});

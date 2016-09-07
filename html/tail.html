@@ -16,5 +16,12 @@
 	<pre id="xoutput"></pre>
 </div>
 
+<script>
+$(document).ready(function () {
+ 	WsTail.create('wss://royal-qa.socialgamenet.com:443/ws/tail?file=/tmp/a.txt', $('#output'));
+	WsTail.create('wss://royal-qa.socialgamenet.com:443/ws/tail?file=/tmp/php-error.txt', $('#xoutput'));
+});
+</script>
+
 </body>
 </html>
