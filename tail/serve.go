@@ -67,22 +67,56 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 
 	var ver uint64
 	var offset int
+	var rCh chan bool
 
 	fmt.Println(`new session`, sid, sFile)
 
+	timeLastSent := time.Now().Unix()
+
 	go func() {
 		for {
-			fid := <-ch
-			bLoop := send(sid, fid, sFile, &ver, &offset, ws)
-			if !bLoop {
-				delete(sessionChan, sid)
-				delete(*sessionMap[fid], sid)
+			_, _, err := ws.ReadMessage()
+			if err == nil {
+				select {
+				case rCh <- true:
+				default:
+				}
+			} else {
+				rCh <- false
 				break
 			}
 		}
 	}()
 
-	// go reporter(sid)
+	go func() {
+
+		var fid uint64
+		var bLoop bool
+
+		for {
+			select {
+			case fid := <-ch:
+				timeLastSent = time.Now().Unix()
+				if fid > 0 {
+					bLoop = send(sid, fid, sFile, &ver, &offset, ws)
+				} else {
+					bLoop = sendNoop(ws)
+				}
+				if !bLoop {
+					break
+				}
+			case r := <-rCh:
+				timeLastSent = time.Now().Unix()
+				bLoop = r
+			}
+		}
+		timeLastSent = 0
+		delete(sessionChan, sid)
+		delete(*sessionMap[fid], sid)
+		ws.Close()
+	}()
+
+	go sendNoopTimer(&timeLastSent, &ch)
 }
 
 func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *websocket.Conn) bool {
@@ -138,10 +172,12 @@ func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *web
 
 			if bReset {
 				bReset = false
+				ws.SetWriteDeadline(time.Now().Add(writeWait))
 				err = ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`!reset,ver:%d`, *ver)))
 			}
 
 			sbuf = append([]byte{'>'}, sbuf[:n]...)
+			ws.SetWriteDeadline(time.Now().Add(writeWait))
 			err = ws.WriteMessage(websocket.TextMessage, sbuf)
 			if err != nil {
 				fmt.Println(`ws err`, err)
@@ -156,6 +192,32 @@ func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *web
 		}
 
 		// fmt.Println(`sid =`, sid, `, fid =`, fid, `, ver =`, ver, `, offset =`, offset, `, fc =`, fc)
+	}
+	return true
+}
+
+func sendNoopTimer(t *int64, ch *chan uint64) {
+	if *t < 1 {
+		return
+	}
+
+	tNext := *t + noopInterval - time.Now().Unix()
+	if tNext < 1 {
+		select {
+		case *ch <- 0:
+		default:
+		}
+		tNext = noopInterval
+	}
+	time.Sleep(time.Second * time.Duration(tNext))
+	go sendNoopTimer(t, ch)
+}
+
+func sendNoop(ws *websocket.Conn) bool {
+	ws.SetWriteDeadline(time.Now().Add(writeWait))
+	err := ws.WriteMessage(websocket.TextMessage, []byte(`!noop`))
+	if err != nil {
+		return false
 	}
 	return true
 }
@@ -177,14 +239,14 @@ func manager() {
 			}
 
 			list := sessionMap[fid]
-
 			if list == nil {
 				n := make(map[uint64]bool, 20)
+				n[sessInfo.id] = true
 				sessionMap[fid] = &n
+			} else {
+				n := *list
+				n[sessInfo.id] = true
 			}
-
-			n := *sessionMap[fid]
-			n[sessInfo.id] = true
 
 			_tend(sessInfo.id, fid)
 		}

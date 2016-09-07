@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gorilla/websocket"
 	"net/http"
+	"time"
 )
 
 var (
@@ -16,14 +17,16 @@ var (
 	tailBind      = make(chan sessionInfo, 1000)
 	filePool      = make(map[uint64]*fileContent)
 	fileMap       = make(map[string]*uint64)
+	writeWait     = 10 * time.Second
 	sessionSerial uint64
 	fileSerial    uint64
 	fileVer       uint64
+	noopInterval  int64 = 25
 
 	addr     = flag.String("addr", ":58888", "http service address")
 	upgrader = websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
+		ReadBufferSize:  4096,
+		WriteBufferSize: 4096,
 		CheckOrigin: func(r *http.Request) bool {
 			return true
 		},
