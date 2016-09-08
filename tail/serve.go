@@ -40,7 +40,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	sFile := strings.TrimSpace(r.Form.Get(`file`))
 	bValid := false
-	for k, _ := range lFileAllow {
+	for k, _ := range fileAllow {
 		if k == sFile {
 			bValid = true
 			break
@@ -49,7 +49,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	if !bValid {
 		/*
 			fmt.Println(`not allowed file`, sFile)
-			for k, _ := range lFileAllow {
+			for k, _ := range fileAllow {
 				fmt.Println(`>`, k)
 			}
 		*/

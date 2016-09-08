@@ -1,55 +1,60 @@
 package main
 
 import (
-	"github.com/hpcloud/tail"
+	"fmt"
+	"gopkg.in/ini.v1"
 	"log"
-	"os"
-	"path/filepath"
-	"strings"
+	"net/http"
 	"time"
 )
 
-func initConfig() (configFile string) {
-	appDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+func loadConfig() {
+	cfg, err := ini.Load(`tail.ini`)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	pwd, err := os.Getwd()
-	if err != nil {
-		log.Fatal(err)
-	}
+	section := cfg.Section(``)
 
-	for _, path := range [...]string{appDir, pwd, `/etc`} {
-		checkConfigFile := path + `/` + configFileName
-		if _, err := os.Stat(checkConfigFile); err == nil {
-			configFile = checkConfigFile
-			break
-		}
-	}
-	if configFile == `` {
-		log.Fatal(`config file "` + configFileName + `" not found`)
-	}
+	// listen
+	httpListen = section.Key(`listen`).MustString(httpListen)
+	fmt.Println(`listen`, httpListen)
 
-	return
+	// noopInterval
+	noopInterval = section.Key(`noop-interval`).MustInt64(noopInterval)
+	fmt.Println(`noopInterval`, noopInterval)
+
+	// writeWait
+	iWriteWait := section.Key(`write-wait`).MustInt64(iWriteWait)
+	if iWriteWait < 1 {
+		iWriteWait = 1
+	}
+	writeWait = time.Duration(iWriteWait) * time.Second
+	fmt.Println(`writeWait`, writeWait)
+
+	// whitelistFileName
+	whitelistFileName = section.Key(`whitelist-file`).MustString(whitelistFileName)
+	fmt.Println(`whitelist-file`, whitelistFileName)
+
+	fmt.Println(``)
 }
 
-func refreshConfig() {
+func configPage(w http.ResponseWriter, r *http.Request) {
 
-	configFile := initConfig()
+	writeHttp(w, "Settings:\n\n")
 
-	var iWait int64 = 3
-	for {
-		t, _ := tail.TailFile(configFile, tail.Config{Follow: true, Logger: tail.DiscardingLogger})
-		lFileAllow = make(map[string]bool)
-		for line := range t.Lines {
-			sLine := line.Text
-			sLine = strings.TrimSpace(sLine)
-			if sLine[0:1] != `/` {
-				continue
-			}
-			lFileAllow[sLine] = true
-		}
-		time.Sleep(time.Duration(iWait) * time.Second)
+	showVar(w, `listen`, httpListen)
+	showVar(w, `noop-interval`, noopInterval)
+	showVar(w, `write-wait`, iWriteWait)
+	showVar(w, `whitelist-file`, whitelistFileName)
+
+	writeHttp(w, "\n\nAllowed files:\n\n")
+
+	for k, _ := range fileAllow {
+		writeHttp(w, "\t"+k+"\n")
 	}
+}
+
+func showVar(w http.ResponseWriter, k string, v interface{}) {
+	writeHttp(w, fmt.Sprintf("\t%-14s = %v\n", k, v))
 }
