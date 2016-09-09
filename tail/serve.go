@@ -288,10 +288,11 @@ func scanUpdate(fid uint64, file string, ch *chan bool) {
 			continue
 		}
 
-		if finfo.Size() == size {
-			continue
-		}
-		if finfo.Size() < size {
+		// if finfo.Size() == size {
+		//	continue
+		// }
+
+		if finfo.Size() <= size {
 			ver++
 		}
 		size = finfo.Size()
