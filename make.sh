@@ -1,5 +1,3 @@
 #!/bin/bash
-
-go build -o bin/wstail \
-	main.go
+go build -o bin/wstail *.go
 strip bin/wstail

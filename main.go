@@ -2,73 +2,54 @@ package main
 
 import (
 	"fmt"
-	"github.com/bitly/go-simplejson"
-	"github.com/labstack/echo"
-	"github.com/labstack/echo/engine/standard"
-	"golang.org/x/net/websocket"
-	"sync/atomic"
+	"github.com/gorilla/websocket"
+	"net/http"
+	"time"
 )
 
-var chMsg = make(chan msgType)
-var aid uint64 = 0
-var lConn = make(map[uint64]*websocket.Conn)
-var lFile = make(map[string]*websocket.Conn)
-var cmdList = [...]string{
-	`setPos`,
-	`who`,
-}
+var (
+	whitelistFileName string = `whitelist.txt`
 
-type msgType struct {
-	id   uint64
-	cmd  string
-	data *simplejson.Json
-}
+	sessionMap    = make(map[uint64]*map[uint64]bool)
+	sessionChan   = make(map[uint64]*chan uint64)
+	tailBind      = make(chan sessionInfo, 1000)
+	filePool      = make(map[uint64]*fileContent)
+	fileMap       = make(map[string]uint64)
+	httpListen    = `:58888`
+	writeWait     time.Duration
+	fileAllow     map[string]bool
+	sessionSerial uint64
+	fileSerial    uint64
+	noopInterval  int64 = 25
+	iWriteWait    int64 = 10
 
-func session() websocket.Handler {
-	return websocket.Handler(func(ws *websocket.Conn) {
-		id := atomic.AddUint64(&aid, 1)
-		fmt.Println(`new connection #`, id)
-		lConn[id] = ws
-
-		msg := `{"cmd":"id","id":"` + fmt.Sprintf(`%d`, id) + `"}`
-		websocket.Message.Send(ws, msg)
-
-		for {
-			msg = ``
-			err := websocket.Message.Receive(ws, &msg)
-			if err != nil {
-				fmt.Println(`#`, id, ` receive exit with`, err.Error())
-				delete(lConn, id)
-				return
-			}
-		}
-	})
-}
-
-func loopRead() {
-	for {
-		msg := <-chMsg
-		for id, Conn := range lConn {
-			if id == msg.id {
-				continue
-			}
-			d := msg.data
-			js, _ := d.Encode()
-			s := fmt.Sprintf(`uid: %d, text: %s`, msg.id, js)
-			fmt.Println(s)
-
-			d.Set(`id`, msg.id)
-			js, _ = d.Encode()
-			websocket.Message.Send(Conn, string(js[:]))
-		}
+	upgrader = websocket.Upgrader{
+		ReadBufferSize:  4096,
+		WriteBufferSize: 4096,
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
 	}
-}
+)
 
 func main() {
 
-	go loopRead()
+	loadConfig()
 
-	e := echo.New()
-	e.GET("/ws", standard.WrapHandler(session()))
-	e.Run(standard.New(":58888"))
+	go refreshWhiteList()
+	go manager()
+
+	http.HandleFunc(`/ws/status`, statusPage)
+	http.HandleFunc(`/ws/tail`, serveWs)
+	http.HandleFunc(`/ws/config`, configPage)
+
+	fmt.Println(`WsTail started`)
+	err := http.ListenAndServe(httpListen, nil)
+	if err != nil {
+		panic("ListenAndServe fail: " + err.Error())
+	}
+}
+
+func writeHttp(w http.ResponseWriter, s string) {
+	w.Write([]byte(s))
 }
