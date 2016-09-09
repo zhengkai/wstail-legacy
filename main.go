@@ -8,7 +8,8 @@ import (
 )
 
 var (
-	whitelistFileName string = `whitelist.txt`
+	whitelistFileName  string = `whitelist.txt`
+	whitelistFileFinal string
 
 	sessionMap    = make(map[uint64]*map[uint64]bool)
 	sessionChan   = make(map[uint64]*chan uint64)

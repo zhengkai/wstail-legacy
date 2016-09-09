@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func initWhiteList() (configFile string) {
+func initWhiteList() (file string) {
 	if whitelistFileName[0:1] == `/` {
 		return whitelistFileName
 	}
@@ -28,11 +28,11 @@ func initWhiteList() (configFile string) {
 	for _, path := range [...]string{appDir, pwd, `/etc`} {
 		checkFile := path + `/` + whitelistFileName
 		if _, err := os.Stat(checkFile); err == nil {
-			configFile = checkFile
+			file = checkFile
 			break
 		}
 	}
-	if configFile == `` {
+	if file == `` {
 		log.Fatal(`config file "` + whitelistFileName + `" not found`)
 	}
 
@@ -41,13 +41,13 @@ func initWhiteList() (configFile string) {
 
 func refreshWhiteList() {
 
-	configFile := initWhiteList()
+	whitelistFileFinal = initWhiteList()
 
-	fmt.Println(`final whitelist file`, configFile)
+	fmt.Println(`final whitelist file`, whitelistFileFinal)
 
 	var iWait int64 = 3
 	for {
-		t, _ := tail.TailFile(configFile, tail.Config{Follow: true, Logger: tail.DiscardingLogger})
+		t, _ := tail.TailFile(whitelistFileFinal, tail.Config{Follow: true, Logger: tail.DiscardingLogger})
 		fileAllow = make(map[string]bool)
 		for line := range t.Lines {
 			sLine := line.Text

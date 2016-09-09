@@ -48,6 +48,8 @@ func configPage(w http.ResponseWriter, r *http.Request) {
 	showVar(w, `write-wait`, iWriteWait)
 	showVar(w, `whitelist-file`, whitelistFileName)
 
+	writeHttp(w, "\n\nWhitelist File:\n\n\t"+whitelistFileFinal)
+
 	writeHttp(w, "\n\nAllowed files:\n\n")
 
 	for k, _ := range fileAllow {
