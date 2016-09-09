@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -30,12 +31,6 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 		// fmt.Println(`init upgrade fail`, err)
 		return
 	}
-	/*
-		err = ws.WriteMessage(websocket.TextMessage, []byte(`!connected`))
-		if err != nil {
-			fmt.Println(`init ws err`, err)
-		}
-	*/
 
 	r.ParseForm()
 	sFile := strings.TrimSpace(r.Form.Get(`file`))
@@ -47,20 +42,14 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !bValid {
-		/*
-			fmt.Println(`not allowed file`, sFile)
-			for k, _ := range fileAllow {
-				fmt.Println(`>`, k)
-			}
-		*/
-		err = ws.WriteMessage(websocket.TextMessage, []byte(`!file deny`+sFile))
+		err = ws.WriteMessage(websocket.TextMessage, []byte(`!filedeny,file=`+sFile))
 		ws.Close()
 		return
 	}
 	// fmt.Println(`file`, sFile, `OK`)
 
 	sid := atomic.AddUint64(&sessionSerial, 1)
-	err = ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`!connection id: %d`, sid)))
+	err = ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`!connection,id=%d`, sid)))
 	ch := make(chan uint64)
 	// fmt.Println(`new chan`, &ch, ch)
 	sessionChan[sid] = &ch
@@ -69,9 +58,9 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 		file: sFile,
 	}
 
-	var ver uint64
-	var offset int
-	var rCh = make(chan bool)
+	ver, _ := strconv.ParseUint(r.Form.Get(`ver`), 10, 64)
+	offset, _ := strconv.Atoi(r.Form.Get(`offset`))
+	rCh := make(chan bool)
 
 	// fmt.Println(`new session`, sid, sFile)
 
@@ -130,6 +119,9 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 
 func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *websocket.Conn) bool {
 
+	bReset := false
+	var tmpVer uint64 = 0
+
 	for {
 		fc := filePool[fid]
 		if fc == nil {
@@ -144,10 +136,9 @@ func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *web
 		}
 		defer f.Close()
 
-		bReset := false
 		if *ver != fc.ver {
 			bReset = true
-			*ver = fc.ver
+			tmpVer = fc.ver
 			*offset = 0
 		}
 
@@ -155,7 +146,6 @@ func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *web
 		if *offset > 0 {
 			buf.Discard(*offset)
 		}
-		// fmt.Println(`offset = `, *offset)
 
 		for {
 			sbuf := make([]byte, 4096)
@@ -168,10 +158,13 @@ func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *web
 				*offset += n
 				bEOF = true
 			} else if err != nil {
-				fmt.Println(`read err`, err)
 				break
 			} else {
 				*offset += n
+			}
+
+			if tmpVer > 0 {
+				*ver = tmpVer
 			}
 
 			checkfc := *filePool[fid]
@@ -182,7 +175,7 @@ func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *web
 			if bReset {
 				bReset = false
 				ws.SetWriteDeadline(time.Now().Add(writeWait))
-				err = ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`!reset,ver:%d`, *ver)))
+				err = ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`!reset,ver=%d`, *ver)))
 			}
 
 			sbuf = append([]byte{'>'}, sbuf[:n]...)
@@ -277,7 +270,7 @@ func scan(fid uint64, file string) {
 
 func scanUpdate(fid uint64, file string, ch *chan bool) {
 
-	var ver uint64
+	var ver uint64 = 1
 	var size int64
 	// var time int64
 
