@@ -30,7 +30,7 @@ func loadConfig() {
 		iWriteWait = 1
 	}
 	writeWait = time.Duration(iWriteWait) * time.Second
-	fmt.Println(`writeWait`, writeWait)
+	fmt.Println(`writeWait`, iWriteWait)
 
 	// whitelistFileName
 	whitelistFileName = section.Key(`whitelist-file`).MustString(whitelistFileName)
