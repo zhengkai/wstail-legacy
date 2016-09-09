@@ -18,8 +18,8 @@
 
 <script>
 $(document).ready(function () {
- 	WsTail.create('wss://royal-qa.socialgamenet.com:443/ws/tail?file=/tmp/a.txt', $('#output'));
-	WsTail.create('wss://royal-qa.socialgamenet.com:443/ws/tail?file=/tmp/php-error.txt', $('#xoutput'));
+ 	WsTail.create('wss://royal-qa.socialgamenet.com:443/ws/tail', '/tmp/a.txt', $('#output'));
+//	WsTail.create('wss://royal-qa.socialgamenet.com:443/ws/tail', '/tmp/php-error.txt', $('#xoutput'));
 });
 </script>
 

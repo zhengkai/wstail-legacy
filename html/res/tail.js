@@ -1,19 +1,24 @@
 var WsTail = {
 	ws: false,
 	target: null,
-	uri: null,
-	create: function(wsUri, oTarget) {
+	url: null,
+	file: null,
+	offset: 0,
+	ver: 0,
+	connectionId: 0,
+	wait: 1,
+	create: function(url, file, oTarget) {
  		var o = $.extend(true, {}, WsTail);
-		console.log('create target', oTarget);
 		o.target = oTarget;
-		o.uri = wsUri;
+		o.file = file;
+		o.url = url;
  		o.init();
 		return o;
 	},
 	init: function() {
-		console.log('init target', this.target);
+		var url = this.url + '?file=' + encodeURI(this.file) + '&ver=' + this.ver + '&offset=' + this.offset
 
-		var ws = new WebSocket(this.uri);
+		var ws = new WebSocket(url);
 		this.ws = ws;
 
 		var $this = this;
@@ -21,12 +26,19 @@ var WsTail = {
 		ws.onclose   = function (e) { $this._wsClose(e) }
 		ws.onmessage = function (e) { $this._wsMessage(e) }
 		ws.onerror   = function (e) { $this._wsError(e) }
+
 	},
 	_wsOpen: function(e) {
-		console.log('ws open', new Date(), e)
+		this.wait = 1;
 	},
 	_wsClose: function(e) {
-		console.log('ws close', new Date(), e)
+		var $this =  this
+		setTimeout(function () {
+			$this.init();
+		}, this.wait * 1000);
+		if (this.wait < 4) {
+			this.wait++;
+		}
 	},
 	_wsMessage: function(e) {
 		var s = e.data;
@@ -40,20 +52,26 @@ var WsTail = {
 		if (cmd == '>') {
 			var oText = $('<span></span>');
 			oText.text(s.substring(1));
+			this.offset += (s.length - 1);
 			this.target.append(oText);
 			this.target.scrollTop(this.target[0].scrollHeight);
 			return;
 		}
 
 		if (cmd == '!') {
-			cmdMsg = s.substring(1);
+			var lCmd = s.substring(1).split(',', 2)
+			cmdMsg = lCmd[0];
+			cmdContent = lCmd[1];
 			if (cmdMsg == 'reset') {
+				if (cmdContent.match(/^ver=(\d+)$/)) {
+					this.ver = RegExp.$1 - 0;
+				}
+				this.offset = 0;
 				this.target.html('');
 				return;
 			}
 		}
 	},
 	_wsError: function(e) {
-		console.log('ws error', new Date(), e)
 	}
 }
