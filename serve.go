@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 )
 
 type sessionInfo struct {
@@ -42,14 +43,14 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !bValid {
-		err = ws.WriteMessage(websocket.TextMessage, []byte(`!filedeny,file=`+sFile))
+		err = wsWrite(ws, []byte(`!filedeny,file=`+sFile))
 		ws.Close()
 		return
 	}
 	// fmt.Println(`file`, sFile, `OK`)
 
 	sid := atomic.AddUint64(&sessionSerial, 1)
-	err = ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`!connection,id=%d`, sid)))
+	err = wsWrite(ws, []byte(fmt.Sprintf(`!connection,id=%d`, sid)))
 	ch := make(chan uint64)
 	// fmt.Println(`new chan`, &ch, ch)
 	sessionChan[sid] = &ch
@@ -62,13 +63,18 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	offset, _ := strconv.Atoi(r.Form.Get(`offset`))
 	rCh := make(chan bool)
 
-	// fmt.Println(`new session`, sid, sFile)
+	fmt.Println(`new session`, sid, sFile, ver, offset)
 
 	timeLastSent := time.Now().Unix()
 
 	go func() {
 		for {
 			_, _, err := ws.ReadMessage()
+			/*
+				if strings.Contains(err.Error(), `close 1002`) {
+					err = nil
+				}
+			*/
 			if err == nil {
 				select {
 				case rCh <- true:
@@ -76,7 +82,9 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				rCh <- false
-				break
+				// fmt.Println(`send false`, sid)
+				// fmt.Println(a, b, err)
+				return
 			}
 		}
 	}()
@@ -100,8 +108,10 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 				}
 			case rc := <-rCh:
 				timeLastSent = time.Now().Unix()
+				// fmt.Println(`read stop loop`)
 				bLoop = rc
 			}
+			// fmt.Println(`stop loop`, bLoop, sid)
 			if !bLoop {
 				break
 			}
@@ -147,20 +157,30 @@ func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *web
 			buf.Discard(*offset)
 		}
 
+		tmpCnt := 0
+
+		prevBuf := []byte(``)
+
 		for {
-			sbuf := make([]byte, 4096)
+			sbuf := make([]byte, buffLen)
 			n, err := buf.Read(sbuf)
-			bEOF := false
+			// fmt.Println(`read =`, n, err, tmpVer, sid)
+
 			if err == io.EOF {
-				if n < 1 {
-					return true
-				}
-				*offset += n
-				bEOF = true
-			} else if err != nil {
+				*ver = tmpVer
+				return true
+			}
+
+			if err != nil {
 				break
-			} else {
-				*offset += n
+			}
+
+			*offset += n
+			if len(prevBuf) > 0 {
+				sbuf = append(prevBuf, sbuf[:n]...)
+				prevBuf = []byte(``)
+			} else if n < buffLen {
+				sbuf = sbuf[:n]
 			}
 
 			if tmpVer > 0 {
@@ -174,26 +194,39 @@ func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *web
 
 			if bReset {
 				bReset = false
-				ws.SetWriteDeadline(time.Now().Add(writeWait))
-				err = ws.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`!reset,ver=%d`, *ver)))
+				err = wsWrite(ws, []byte(fmt.Sprintf(`!reset,ver=%d`, *ver)))
 			}
 
-			sbuf = append([]byte{'>'}, sbuf[:n]...)
-			ws.SetWriteDeadline(time.Now().Add(writeWait))
-			err = ws.WriteMessage(websocket.TextMessage, sbuf)
+			if !utf8.Valid(sbuf) {
+				pass := false
+				slen := len(sbuf)
+				for _, i := range [...]int{1, 2, 3, 4, 5, 6} {
+					tbuf := sbuf[:slen-i]
+					// fmt.Println(`tbuf len`, i, len(tbuf))
+					if utf8.Valid(tbuf) {
+						pass = true
+						prevBuf = sbuf[slen-i:]
+						sbuf = tbuf
+						// fmt.Println(`utf8`, i, len(prevBuf))
+						break
+					}
+				}
+				if !pass {
+					// fmt.Println(`sub fail`)
+				}
+			}
+
+			sbuf = append([]byte{'>'}, sbuf...)
+
+			tmpCnt += n
+			// fmt.Println(`length =`, n, len(sbuf)-1)
+
+			err = wsWrite(ws, sbuf)
 			if err != nil {
 				fmt.Println(`ws err`, err)
 				return false
 			}
-
-			// fmt.Println(`ws send = "` + string(sbuf) + `"`)
-			// ws.WriteMessage(websocket.BinaryMessage, []byte(`end`))
-			if bEOF {
-				break
-			}
 		}
-
-		// fmt.Println(`sid =`, sid, `, fid =`, fid, `, ver =`, ver, `, offset =`, offset, `, fc =`, fc)
 	}
 	return true
 }
@@ -216,45 +249,50 @@ func sendNoopTimer(t *int64, ch *chan uint64) {
 }
 
 func sendNoop(ws *websocket.Conn) bool {
-	ws.SetWriteDeadline(time.Now().Add(writeWait))
-	err := ws.WriteMessage(websocket.TextMessage, []byte(`!noop`))
+	err := wsWrite(ws, []byte(`!noop`))
 	if err != nil {
 		return false
 	}
 	return true
 }
 
+func wsWrite(ws *websocket.Conn, msg []byte) error {
+	transOut += uint64(len(msg))
+	ws.SetWriteDeadline(time.Now().Add(writeWait))
+	return ws.WriteMessage(websocket.TextMessage, msg)
+}
+
 func manager() {
 
 	var fid uint64
 	for {
-		select {
-		case sessInfo := <-tailBind:
+		sessInfo := <-tailBind
 
-			ftmp := fileMap[sessInfo.file]
-			if ftmp > 0 {
-				fid = ftmp
-			} else {
-				fid = atomic.AddUint64(&fileSerial, 1)
-				fileMap[sessInfo.file] = fid
-				go scan(fid, sessInfo.file)
-			}
-
-			list := sessionMap[fid]
-			if list == nil {
-				n := make(map[uint64]bool, 20)
-				n[sessInfo.id] = true
-				sessionMap[fid] = &n
-			} else {
-				n := *list
-				n[sessInfo.id] = true
-			}
-
-			go func() {
-				*sessionChan[sessInfo.id] <- fid
-				// fmt.Println(`sent chan`)
-			}()
+		ftmp := fileMap[sessInfo.file]
+		if ftmp > 0 {
+			fid = ftmp
+		} else {
+			fileSerial++
+			// fid = atomic.AddUint64(&fileSerial, 1)
+			fid = fileSerial
+			fileMap[sessInfo.file] = fid
+			go scan(fid, sessInfo.file)
 		}
+
+		list := sessionMap[fid]
+		if list == nil {
+			n := make(map[uint64]bool, 20)
+			n[sessInfo.id] = true
+			sessionMap[fid] = &n
+		} else {
+			n := *list
+			n[sessInfo.id] = true
+		}
+
+		go func() {
+			*sessionChan[sessInfo.id] <- fid
+			// fmt.Println(`sent chan`)
+		}()
 	}
 }
 
