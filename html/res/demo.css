@@ -1,0 +1,21 @@
+body {
+	font-size: 16px;
+	font-family: monospace;
+}
+
+a {
+	color: blue;
+}
+a:hover {
+	font-weight: bold;
+}
+
+pre {
+	float: left;
+	width: 640px;
+	margin-right: 20px;
+	border: 1px solid black;
+	height: 500px;
+	overflow-x: none;
+	overflow-y: scroll;
+}

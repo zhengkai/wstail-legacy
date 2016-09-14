@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>WsTail Demo</title>
+<script src="res/jquery-3.1.0.slim.min.js"></script>
+<script src="res/wstail.js"></script>
+<script src="res/ansi_up.js"></script>
+<link rel="stylesheet" href="res/wstail.css" type="text/css" />
+</head>
+<body>
+
+<h2>WsTail Demo</h2>
+
+<p><a target="_blank" href="https://github.com/zhengkai/wstail">WsTail on Github</a></p>
+
+<p><a target="_blank" href="/ws/status">status</a> <a target="_blank" href="/ws/config">config</a></p>
+
+<pre id="output_a"></pre>
+<pre id="output_b"></pre>
+
+<script>
+$(document).ready(function () {
+	WsTail.create({
+		ws: 'wss://royal-qa.socialgamenet.com/ws/tail',
+		file: '/tmp/fortune.txt',
+		parse: function(s) {
+			return ansi_up.ansi_to_html(s);
+		},
+		target: $('#output_a')
+	});
+
+	WsTail.create({
+		ws: 'wss://royal-qa.socialgamenet.com/ws/tail',
+		file: '/tmp/php-error.txt',
+		parse: function(s) {
+			return ansi_up.ansi_to_html(s);
+		},
+		target: $('#output_b')
+	});
+});
+</script>
+
+</body>
+</html>

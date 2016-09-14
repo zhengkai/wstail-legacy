@@ -2,27 +2,35 @@
 <html>
 <head>
 <meta charset="UTF-8" />
-<title>WebSocket Test</title>
-<script src="/res/jquery-3.1.0.slim.min.js"></script>
-<script src="/res/script.js"></script>
-<link rel="stylesheet" href="/res/style.css" type="text/css" />
+<title>WsTail Demo</title>
+<script src="res/jquery-3.1.0.slim.min.js"></script>
+<script src="res/wstail.js"></script>
+<script src="res/ansi_up.js"></script>
+<link rel="stylesheet" href="res/demo.css" type="text/css" />
 </head>
 <body>
 
-<div id="white_board"></div>
+<h2>WsTail Demo</h2>
 
-<h2>WebSocket Test</h2>
+<p>
+<a target="_blank" href="https://github.com/zhengkai/wstail">WsTail on Github</a> |
+<a target="_blank" href="https://wstail.soulogic.com/ws/status">status</a> |
+<a target="_blank" href="https://wstail.soulogic.com/ws/config">config</a></p>
 
-<p>status: <span id="status"></span></p>
+<pre id="output"></pre>
 
-<div class="input">
-<textarea rows="3" cols="40" id="send_text"></textarea>
-<p><button id="send_button" onclick="buttonSend()">Send</button><p>
-</div>
-
-<p class="position">x = <span id="position_x"></span>, y = <span id="position_y"></span></p>
-
-<div id="output"></div>
+<script>
+$(document).ready(function () {
+	WsTail.create({
+		ws: 'wss://wstail.soulogic.com/ws/tail',
+		file: '/tmp/fortune.txt',
+		parse: function(s) {
+			return ansi_up.ansi_to_html(s);
+		},
+		target: $('#output')
+	});
+});
+</script>
 
 </body>
 </html>
