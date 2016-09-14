@@ -11,6 +11,8 @@ var (
 	whitelistFileName  string = `whitelist.txt`
 	whitelistFileFinal string
 
+	version = `v1.0.0`
+
 	timeStart     = time.Now().Round(time.Second)
 	sessionMap    = make(map[uint64]*map[uint64]bool)
 	sessionChan   = make(map[uint64]*chan uint64)

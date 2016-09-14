@@ -9,11 +9,13 @@ import (
 
 func statusPage(w http.ResponseWriter, r *http.Request) {
 
+	writeHttp(w, fmt.Sprintf("version: %s\n\n", version))
+
 	t := time.Now().Round(time.Second).Sub(timeStart)
 	writeHttp(w, fmt.Sprintf("uptime: %s\n", t))
 
 	connNum := len(sessionChan)
-	writeHttp(w, fmt.Sprintf("websocket connections: %d\n", connNum))
+	writeHttp(w, fmt.Sprintf("websocket connections: %d\n\n", connNum))
 
 	writeHttp(w, fmt.Sprintf("data traffic out: %s\n", NumberToString(transOut, ',')))
 
@@ -31,7 +33,7 @@ func statusPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeHttp(w, "\n\nsession list:\n")
+	writeHttp(w, "\nsession list:\n")
 	for sid, _ := range sessionChan {
 		writeHttp(w, fmt.Sprintf("\t%d\n", sid))
 	}
@@ -40,8 +42,6 @@ func statusPage(w http.ResponseWriter, r *http.Request) {
 func NumberToString(n uint64, sep rune) string {
 
 	s := fmt.Sprintf(`%d`, n)
-
-	fmt.Println(`s =`, s)
 
 	startOffset := 0
 	var buff bytes.Buffer

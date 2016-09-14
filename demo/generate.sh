@@ -8,10 +8,10 @@ do
 	while [ $COUNTER -lt 100 ]; do
 
 		echo -e "\n"`date -u +'%Y-%m-%d %H:%M:%S'`" UTC\n" >> $OUTFILE
-		/usr/games/fortune literature >> $OUTFILE
+		/usr/games/fortune >> $OUTFILE
 
 		let COUNTER=COUNTER+1
 
-		sleep 1
+		sleep 2.7
 	done
 done

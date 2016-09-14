@@ -9,7 +9,7 @@ import (
 )
 
 func loadConfig() {
-	cfg, err := ini.Load(`tail.ini`)
+	cfg, err := ini.Load(`wstail.ini`)
 	if err != nil {
 		log.Fatal(err)
 	}
