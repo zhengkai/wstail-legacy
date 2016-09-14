@@ -167,7 +167,9 @@ func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *web
 			// fmt.Println(`read =`, n, err, tmpVer, sid)
 
 			if err == io.EOF {
-				*ver = tmpVer
+				if *offset > 0 && tmpVer > 0 {
+					*ver = tmpVer
+				}
 				return true
 			}
 
