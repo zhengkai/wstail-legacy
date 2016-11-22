@@ -41,6 +41,8 @@ func loadConfig() {
 
 func configPage(w http.ResponseWriter, r *http.Request) {
 
+	writeHttp(w, fmt.Sprintf("version: %s\n\n", version))
+
 	writeHttp(w, "Settings:\n\n")
 
 	showVar(w, `listen`, httpListen)

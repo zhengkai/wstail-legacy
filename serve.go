@@ -28,6 +28,7 @@ type fileContent struct {
 
 func serveWs(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
+
 	if err != nil {
 		// fmt.Println(`init upgrade fail`, err)
 		return
@@ -59,195 +60,158 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 		file: sFile,
 	}
 
+	rfid := <-ch
+
 	ver, _ := strconv.ParseUint(r.Form.Get(`ver`), 10, 64)
 	offset, _ := strconv.Atoi(r.Form.Get(`offset`))
 	rCh := make(chan bool)
 
 	fmt.Println(`new session`, sid, sFile, ver, offset)
 
-	timeLastSent := time.Now().Unix()
+	go readLoop(*ws, &rCh)
 
-	go func() {
-		for {
-			_, _, err := ws.ReadMessage()
-			/*
-				if strings.Contains(err.Error(), `close 1002`) {
-					err = nil
-				}
-			*/
-			if err == nil {
-				select {
-				case rCh <- true:
-				default:
-				}
-			} else {
-				rCh <- false
-				// fmt.Println(`send false`, sid)
-				// fmt.Println(a, b, err)
-				return
-			}
+	bLoop := true
+	for {
+		select {
+		case <-ch:
+			bLoop = send(sid, rfid, sFile, &ver, &offset, ws)
+		case rc := <-rCh:
+			bLoop = rc
+		case <-time.After(time.Second * time.Duration(noopInterval)):
+			bLoop = sendNoop(ws)
 		}
-	}()
+		if !bLoop {
+			break
+		}
+	}
 
-	go func() {
+	delete(sessionChan, sid)
+	delete(*sessionMap[rfid], sid)
+	ws.Close()
+}
 
-		var rfid uint64
-		bLoop := true
-
-		// fmt.Println(`start loop`, ch)
-
-		for {
+func readLoop(ws websocket.Conn, rCh *chan bool) {
+	for {
+		_, _, err := ws.ReadMessage()
+		if err == nil {
 			select {
-			case fid := <-ch:
-				timeLastSent = time.Now().Unix()
-				if fid > 0 {
-					rfid = fid
-					bLoop = send(sid, fid, sFile, &ver, &offset, ws)
-				} else {
-					bLoop = sendNoop(ws)
-				}
-			case rc := <-rCh:
-				timeLastSent = time.Now().Unix()
-				// fmt.Println(`read stop loop`)
-				bLoop = rc
+			case *rCh <- true:
+			default:
 			}
-			// fmt.Println(`stop loop`, bLoop, sid)
-			if !bLoop {
-				break
-			}
+		} else {
+			*rCh <- false
+			return
 		}
-		timeLastSent = 0
-		delete(sessionChan, sid)
-		if rfid > 0 {
-			delete(*sessionMap[rfid], sid)
-		}
-		ws.Close()
-	}()
-
-	go sendNoopTimer(&timeLastSent, &ch)
+	}
 }
 
 func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *websocket.Conn) bool {
 
 	bReset := false
 	var tmpVer uint64 = 0
+	var fc *fileContent
+	var f *os.File
 
-	for {
-		fc := filePool[fid]
+	for f == nil {
+
+		fc = filePool[fid]
 		if fc == nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
-		f, err := os.Open(file)
+		var err error
+		f, err = os.Open(file)
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
-		defer f.Close()
+	}
+	defer f.Close()
 
-		if *ver != fc.ver {
-			bReset = true
-			tmpVer = fc.ver
-			*offset = 0
-		}
+	if *ver != fc.ver {
+		bReset = true
+		tmpVer = fc.ver
+		*offset = 0
+	}
 
-		buf := bufio.NewReader(f)
-		if *offset > 0 {
-			buf.Discard(*offset)
-		}
+	buf := bufio.NewReader(f)
+	if *offset > 0 {
+		buf.Discard(*offset)
+	}
 
-		tmpCnt := 0
+	tmpCnt := 0
 
-		prevBuf := []byte(``)
+	prevBuf := []byte(``)
 
-		for {
-			sbuf := make([]byte, buffLen)
-			n, err := buf.Read(sbuf)
-			// fmt.Println(`read =`, n, err, tmpVer, sid)
+	for {
+		sbuf := make([]byte, buffLen)
+		n, err := buf.Read(sbuf)
 
-			if err == io.EOF {
-				if *offset > 0 && tmpVer > 0 {
-					*ver = tmpVer
-				}
-				return true
-			}
-
-			if err != nil {
-				break
-			}
-
-			*offset += n
-			if len(prevBuf) > 0 {
-				sbuf = append(prevBuf, sbuf[:n]...)
-				prevBuf = []byte(``)
-			} else if n < buffLen {
-				sbuf = sbuf[:n]
-			}
-
-			if tmpVer > 0 {
+		if err == io.EOF {
+			if *offset > 0 && tmpVer > 0 {
 				*ver = tmpVer
 			}
+			return true
+		}
 
-			checkfc := *filePool[fid]
-			if *ver != checkfc.ver {
-				break
-			}
+		if err != nil {
+			break
+		}
 
-			if bReset {
-				bReset = false
-				err = wsWrite(ws, []byte(fmt.Sprintf(`!reset,ver=%d`, *ver)))
-			}
+		*offset += n
+		if len(prevBuf) > 0 {
+			sbuf = append(prevBuf, sbuf[:n]...)
+			prevBuf = []byte(``)
+		} else if n < buffLen {
+			sbuf = sbuf[:n]
+		}
 
-			if !utf8.Valid(sbuf) {
-				pass := false
-				slen := len(sbuf)
-				for _, i := range [...]int{1, 2, 3, 4, 5, 6} {
-					tbuf := sbuf[:slen-i]
-					// fmt.Println(`tbuf len`, i, len(tbuf))
-					if utf8.Valid(tbuf) {
-						pass = true
-						prevBuf = sbuf[slen-i:]
-						sbuf = tbuf
-						// fmt.Println(`utf8`, i, len(prevBuf))
-						break
-					}
+		if tmpVer > 0 {
+			*ver = tmpVer
+		}
+
+		checkfc := *filePool[fid]
+		if *ver != checkfc.ver {
+			break
+		}
+
+		if bReset {
+			bReset = false
+			err = wsWrite(ws, []byte(fmt.Sprintf(`!reset,ver=%d`, *ver)))
+		}
+
+		if !utf8.Valid(sbuf) {
+			pass := false
+			slen := len(sbuf)
+			for _, i := range [...]int{1, 2, 3, 4, 5, 6} {
+				tbuf := sbuf[:slen-i]
+				// fmt.Println(`tbuf len`, i, len(tbuf))
+				if utf8.Valid(tbuf) {
+					pass = true
+					prevBuf = sbuf[slen-i:]
+					sbuf = tbuf
+					// fmt.Println(`utf8`, i, len(prevBuf))
+					break
 				}
-				if !pass {
-					// fmt.Println(`sub fail`)
-				}
 			}
-
-			sbuf = append([]byte{'>'}, sbuf...)
-
-			tmpCnt += n
-			// fmt.Println(`length =`, n, len(sbuf)-1)
-
-			err = wsWrite(ws, sbuf)
-			if err != nil {
-				fmt.Println(`ws err`, err)
-				return false
+			if !pass {
+				fmt.Println(`utf8 fail`)
+				continue
 			}
+		}
+
+		sbuf = append([]byte{'>'}, sbuf...)
+
+		tmpCnt += n
+
+		err = wsWrite(ws, sbuf)
+		if err != nil {
+			fmt.Println(`ws err`, err)
+			return false
 		}
 	}
 	return true
-}
-
-func sendNoopTimer(t *int64, ch *chan uint64) {
-	if *t < 1 {
-		return
-	}
-
-	tNext := *t + noopInterval - time.Now().Unix()
-	if tNext < 1 {
-		select {
-		case *ch <- 0:
-		default:
-		}
-		tNext = noopInterval
-	}
-	time.Sleep(time.Second * time.Duration(tNext))
-	go sendNoopTimer(t, ch)
 }
 
 func sendNoop(ws *websocket.Conn) bool {
@@ -293,6 +257,7 @@ func manager() {
 
 		go func() {
 			*sessionChan[sessInfo.id] <- fid
+			*sessionChan[sessInfo.id] <- 1
 			// fmt.Println(`sent chan`)
 		}()
 	}
@@ -349,24 +314,23 @@ func scanUpdate(fid uint64, file string, ch *chan bool) {
 
 func tend(fid uint64) {
 	// fmt.Println(`sessionMap`, sessionMap[fid])
-	c := sessionMap[fid]
-	if c == nil {
+	l := sessionMap[fid]
+	if l == nil {
 		return
 	}
 
-	for sid, _ := range *sessionMap[fid] {
-		go _tend(sid, fid)
+	for sid, _ := range *l {
+		go _tend(sid)
 	}
 }
 
-func _tend(sid uint64, fid uint64) {
-	// fmt.Println(`_tend`, sid, fid, sessionChan[sid])
+func _tend(sid uint64) {
 	ch := sessionChan[sid]
 	if ch == nil {
 		return
 	}
 	select {
-	case *ch <- fid:
+	case *ch <- 1:
 	default:
 	}
 }
