@@ -40,6 +40,8 @@ var (
 
 func main() {
 
+	fmt.Println(`WdTail`, fmt.Sprintf(`%s`, version), `by Zheng Kai`, "\n")
+
 	loadConfig()
 
 	go refreshWhiteList()

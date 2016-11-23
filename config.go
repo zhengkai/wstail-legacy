@@ -3,26 +3,25 @@ package main
 import (
 	"fmt"
 	"gopkg.in/ini.v1"
-	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 )
 
 func loadConfig() {
-	cfg, err := ini.Load(`wstail.ini`)
-	if err != nil {
-		log.Fatal(err)
-	}
+
+	cfg := configInit()
 
 	section := cfg.Section(``)
 
 	// listen
 	httpListen = section.Key(`listen`).MustString(httpListen)
-	fmt.Println(`listen`, httpListen)
+	fmt.Println("\t", `listen`, httpListen)
 
 	// noopInterval
 	noopInterval = section.Key(`noop-interval`).MustInt64(noopInterval)
-	fmt.Println(`noopInterval`, noopInterval)
+	fmt.Println("\t", `noopInterval`, noopInterval)
 
 	// writeWait
 	iWriteWait := section.Key(`write-wait`).MustInt64(iWriteWait)
@@ -30,13 +29,13 @@ func loadConfig() {
 		iWriteWait = 1
 	}
 	writeWait = time.Duration(iWriteWait) * time.Second
-	fmt.Println(`writeWait`, iWriteWait)
+	fmt.Println("\t", `writeWait`, iWriteWait)
 
 	// whitelistFileName
 	whitelistFileName = section.Key(`whitelist-file`).MustString(whitelistFileName)
-	fmt.Println(`whitelist-file`, whitelistFileName)
+	fmt.Println("\t", `whitelist-file`, whitelistFileName)
 
-	fmt.Println(``)
+	fmt.Println()
 }
 
 func configPage(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +56,47 @@ func configPage(w http.ResponseWriter, r *http.Request) {
 	for k, _ := range fileAllow {
 		writeHttp(w, "\t"+k+"\n")
 	}
+}
+
+func configInit() *ini.File {
+
+	cfg := ini.Empty()
+
+	baseName := `wstail.ini`
+	bLoad := false
+	file := ``
+
+	dirList := make([]string, 2)
+
+	dir, err := os.Getwd()
+	if err == nil {
+		dirList = append(dirList, dir)
+	}
+	dirList = append(dirList, os.Args[0])
+
+	for _, dir := range dirList {
+		dir, err = filepath.Abs(filepath.Dir(dir))
+		if err == nil {
+			if dir != `/` {
+				dir += `/`
+			}
+			file = dir + baseName
+			cfgbak, err := ini.Load(file)
+			if err == nil {
+				cfg = cfgbak
+				bLoad = true
+				break
+			}
+		}
+	}
+
+	if !bLoad {
+		file = `none`
+	}
+
+	fmt.Println(`config = `+file, "\n")
+
+	return cfg
 }
 
 func showVar(w http.ResponseWriter, k string, v interface{}) {
