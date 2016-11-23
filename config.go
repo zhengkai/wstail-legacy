@@ -73,6 +73,8 @@ func configInit() *ini.File {
 		dirList = append(dirList, dir)
 	}
 	dirList = append(dirList, os.Args[0])
+	dirList = append(dirList, `/usr/etc/wstail.ini`)
+	dirList = append(dirList, `/etc/wstail.ini`)
 
 	for _, dir := range dirList {
 		dir, err = filepath.Abs(filepath.Dir(dir))
