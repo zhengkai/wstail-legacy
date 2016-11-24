@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -36,24 +37,21 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 
 	r.ParseForm()
 	sFile := strings.TrimSpace(r.Form.Get(`file`))
+
 	bValid := false
-	for k, _ := range fileAllow {
-		if k == sFile {
-			bValid = true
-			break
-		}
+	sFile, err = filepath.Abs(sFile)
+	if err == nil {
+		bValid = checkFileInWhiteList(sFile)
 	}
 	if !bValid {
 		err = wsWrite(ws, []byte(`!filedeny,file=`+sFile))
 		ws.Close()
 		return
 	}
-	// fmt.Println(`file`, sFile, `OK`)
 
 	sid := atomic.AddUint64(&sessionSerial, 1)
 	err = wsWrite(ws, []byte(fmt.Sprintf(`!connection,id=%d`, sid)))
 	ch := make(chan uint64)
-	// fmt.Println(`new chan`, &ch, ch)
 	sessionChan[sid] = &ch
 	tailBind <- sessionInfo{
 		id:   sid,
@@ -215,7 +213,7 @@ func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *web
 }
 
 func sendNoop(ws *websocket.Conn) bool {
-	err := wsWrite(ws, []byte(`!noop`))
+	err := ws.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait))
 	if err != nil {
 		return false
 	}

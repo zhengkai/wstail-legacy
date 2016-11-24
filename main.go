@@ -23,6 +23,7 @@ var (
 	buffLen       = 4096
 	writeWait     time.Duration
 	fileAllow     map[string]bool
+	dirAllow      map[string]bool
 	sessionSerial uint64
 	fileSerial    uint64
 	transOut      uint64 = 0

@@ -45,18 +45,48 @@ func refreshWhiteList() {
 
 	fmt.Println(`final whitelist file`, whitelistFileFinal)
 
+	fileAllow = make(map[string]bool)
+	dirAllow = make(map[string]bool)
+
 	var iWait int64 = 3
 	for {
 		t, _ := tail.TailFile(whitelistFileFinal, tail.Config{Follow: true, Logger: tail.DiscardingLogger})
-		fileAllow = make(map[string]bool)
 		for line := range t.Lines {
 			sLine := line.Text
 			sLine = strings.TrimSpace(sLine)
-			if sLine[0:1] != `/` {
+
+			if !strings.HasPrefix(sLine, `/`) {
 				continue
 			}
-			fileAllow[sLine] = true
+			if strings.HasSuffix(sLine, `/`) {
+				dirAllow[sLine] = true
+			} else {
+				fileAllow[sLine] = true
+			}
 		}
 		time.Sleep(time.Duration(iWait) * time.Second)
 	}
+}
+
+func checkFileInWhiteList(sFile string) bool {
+
+	if strings.HasSuffix(sFile, `/`) {
+		return false
+	}
+
+	var k string
+
+	for k, _ = range fileAllow {
+		if k == sFile {
+			return true
+		}
+	}
+
+	for k, _ = range dirAllow {
+		if strings.HasPrefix(sFile, k) {
+			return true
+		}
+	}
+
+	return false
 }

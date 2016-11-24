@@ -1,3 +1,4 @@
 /tmp/a.txt
 /tmp/php-error.txt
 /tmp/fortune.txt
+/tmp/
