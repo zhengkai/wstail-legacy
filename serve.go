@@ -72,7 +72,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-ch:
-			bLoop = send(sid, rfid, sFile, &ver, &offset, ws)
+			bLoop = send(rfid, sFile, &ver, &offset, ws)
 		case rc := <-rCh:
 			bLoop = rc
 		case <-time.After(time.Second * time.Duration(noopInterval)):
@@ -103,27 +103,22 @@ func readLoop(ws websocket.Conn, rCh *chan bool) {
 	}
 }
 
-func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *websocket.Conn) bool {
+func send(fid uint64, file string, ver *uint64, offset *int, ws *websocket.Conn) bool {
 
-	bReset := false
 	var tmpVer uint64 = 0
-	var fc *fileContent
-	var f *os.File
+	bReset := false
 
-	for f == nil {
+	fc := filePool[fid]
+	if fc == nil {
+		fmt.Println(`empty filePool`)
+		return true
+	}
 
-		fc = filePool[fid]
-		if fc == nil {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
+	fmt.Println(`filePool`, fc)
 
-		var err error
-		f, err = os.Open(file)
-		if err != nil {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
+	f, err := os.Open(file)
+	if err != nil {
+		return true
 	}
 	defer f.Close()
 
@@ -138,6 +133,15 @@ func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *web
 		buf.Discard(*offset)
 	}
 
+	if !_send(fid, bReset, tmpVer, buf, ver, offset, ws) {
+		return false
+	}
+
+	return true
+}
+
+func _send(fid uint64, bReset bool, tmpVer uint64, buf *bufio.Reader, ver *uint64, offset *int, ws *websocket.Conn) bool {
+
 	tmpCnt := 0
 
 	prevBuf := []byte(``)
@@ -150,7 +154,7 @@ func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *web
 			if *offset > 0 && tmpVer > 0 {
 				*ver = tmpVer
 			}
-			return true
+			break
 		}
 
 		if err != nil {
@@ -183,18 +187,19 @@ func send(sid uint64, fid uint64, file string, ver *uint64, offset *int, ws *web
 			pass := false
 			slen := len(sbuf)
 			for _, i := range [...]int{1, 2, 3, 4, 5, 6} {
-				tbuf := sbuf[:slen-i]
-				// fmt.Println(`tbuf len`, i, len(tbuf))
+				subs := slen - i
+				if subs < 1 {
+					break
+				}
+				tbuf := sbuf[:subs]
 				if utf8.Valid(tbuf) {
 					pass = true
-					prevBuf = sbuf[slen-i:]
+					prevBuf = sbuf[subs:]
 					sbuf = tbuf
-					// fmt.Println(`utf8`, i, len(prevBuf))
 					break
 				}
 			}
 			if !pass {
-				fmt.Println(`utf8 fail`)
 				continue
 			}
 		}
@@ -231,16 +236,17 @@ func manager() {
 	var fid uint64
 	for {
 		sessInfo := <-tailBind
+		file := sessInfo.file
 
-		ftmp := fileMap[sessInfo.file]
+		ftmp := fileMap[file]
 		if ftmp > 0 {
 			fid = ftmp
 		} else {
 			fileSerial++
 			// fid = atomic.AddUint64(&fileSerial, 1)
 			fid = fileSerial
-			fileMap[sessInfo.file] = fid
-			go scan(fid, sessInfo.file)
+			fileMap[file] = fid
+			go scan(fid, file)
 		}
 
 		list := sessionMap[fid]
@@ -256,7 +262,6 @@ func manager() {
 		go func() {
 			*sessionChan[sessInfo.id] <- fid
 			*sessionChan[sessInfo.id] <- 1
-			// fmt.Println(`sent chan`)
 		}()
 	}
 }
@@ -311,7 +316,6 @@ func scanUpdate(fid uint64, file string, ch *chan bool) {
 }
 
 func tend(fid uint64) {
-	// fmt.Println(`sessionMap`, sessionMap[fid])
 	l := sessionMap[fid]
 	if l == nil {
 		return

@@ -19,10 +19,6 @@ func statusPage(w http.ResponseWriter, r *http.Request) {
 
 	writeHttp(w, fmt.Sprintf("data traffic out: %s\n", NumberToString(transOut, ',')))
 
-	if connNum < 1 {
-		return
-	}
-
 	writeHttp(w, "\nfile list:\n")
 	for file, fid := range fileMap {
 		writeHttp(w, fmt.Sprintf("%5d. %s\n", fid, file))
@@ -31,6 +27,10 @@ func statusPage(w http.ResponseWriter, r *http.Request) {
 		for sid, _ := range *sMap {
 			writeHttp(w, fmt.Sprintf("\t\t%d\n", sid))
 		}
+	}
+
+	if connNum < 1 {
+		return
 	}
 
 	writeHttp(w, "\nsession list:\n")

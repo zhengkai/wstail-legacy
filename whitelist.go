@@ -43,7 +43,7 @@ func refreshWhiteList() {
 
 	whitelistFileFinal = initWhiteList()
 
-	fmt.Println(`final whitelist file`, whitelistFileFinal)
+	fmt.Println(`final whitelist file`, whitelistFileFinal, "\n")
 
 	fileAllow = make(map[string]bool)
 	dirAllow = make(map[string]bool)
