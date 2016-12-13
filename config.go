@@ -6,12 +6,16 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
-func loadConfig() {
+func loadConfig(file string) {
 
-	cfg := configInit()
+	cfg := configInit(file)
+
+	fmt.Println(`load config =`, configFileFinal)
+	return
 
 	section := cfg.Section(``)
 
@@ -62,23 +66,30 @@ func configPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func configInit() *ini.File {
+func configInit(file) (cfg *ini.File) {
 
-	cfg := ini.Empty()
+	var err error
 
-	baseName := `wstail.ini`
-	bLoad := false
-	file := ``
+	separator := string(os.PathSeparator)
 
-	dirList := make([]string, 2)
+	if strings.HasPrefix(file, separator) {
+		cfg, err = ini.Load(file)
+		if err == nil {
+			configFileFinal = file
+		}
+		return cfg
+	}
+
+	dirList := []string{}
+	fileLoad := ``
 
 	dir, err := os.Getwd()
 	if err == nil {
 		dirList = append(dirList, dir)
 	}
-	dirList = append(dirList, os.Args[0])
-	dirList = append(dirList, `/usr/etc/wstail.ini`)
-	dirList = append(dirList, `/etc/wstail.ini`)
+	if strings.Contains(file, separator) {
+		dirList = append(dirList, os.Args[0])
+	}
 
 	for _, dir := range dirList {
 		dir, err = filepath.Abs(filepath.Dir(dir))
@@ -86,21 +97,16 @@ func configInit() *ini.File {
 			if dir != `/` {
 				dir += `/`
 			}
-			file = dir + baseName
-			cfgbak, err := ini.Load(file)
+			fileLoad = dir + configFileName
+			cfgbak, err := ini.Load(fileLoad)
 			if err == nil {
 				cfg = cfgbak
+				configFileFinal = fileLoad
 				bLoad = true
 				break
 			}
 		}
 	}
-
-	if !bLoad {
-		file = `none`
-	}
-
-	fmt.Println(`config = `+file, "\n")
 
 	return cfg
 }

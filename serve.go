@@ -3,8 +3,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/fsnotify/fsnotify"
-	"github.com/gorilla/websocket"
 	"io"
 	"log"
 	"net/http"
@@ -15,6 +13,9 @@ import (
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/gorilla/websocket"
 )
 
 type sessionInfo struct {
@@ -26,6 +27,16 @@ type fileContent struct {
 	ver  uint64
 	size int64
 }
+
+var (
+	upgrader = websocket.Upgrader{
+		ReadBufferSize:  4096,
+		WriteBufferSize: 4096,
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
+)
 
 func serveWs(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)

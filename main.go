@@ -2,16 +2,17 @@ package main
 
 import (
 	"fmt"
-	"github.com/gorilla/websocket"
 	"net/http"
 	"time"
 )
 
 var (
+	configFileName     string = `wstail.ini`
+	configFileFinal    string
 	whitelistFileName  string = `whitelist.txt`
 	whitelistFileFinal string
 
-	version = `v1.0.1`
+	version = `1.0.1`
 
 	timeStart     = time.Now().Round(time.Second)
 	sessionMap    = make(map[uint64]*map[uint64]bool)
@@ -29,21 +30,14 @@ var (
 	transOut      uint64 = 0
 	noopInterval  int64  = 25
 	iWriteWait    int64  = 10
-
-	upgrader = websocket.Upgrader{
-		ReadBufferSize:  4096,
-		WriteBufferSize: 4096,
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
-	}
 )
 
 func main() {
 
-	fmt.Println(`WdTail`, fmt.Sprintf(`%s`, version), `by Zheng Kai`, "\n")
+	arg := arg()
 
 	loadConfig()
+	return
 
 	go refreshWhiteList()
 	go manager()
